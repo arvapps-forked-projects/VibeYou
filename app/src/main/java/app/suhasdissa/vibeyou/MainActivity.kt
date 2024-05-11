@@ -7,69 +7,55 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.DrawerValue
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Surface
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.net.toUri
-import androidx.navigation.compose.rememberNavController
-import app.suhasdissa.vibeyou.backend.viewmodel.PlayerViewModel
-import app.suhasdissa.vibeyou.ui.components.NavDrawerContent
-import app.suhasdissa.vibeyou.ui.theme.LibreMusicTheme
-import kotlinx.coroutines.launch
+import androidx.lifecycle.viewmodel.compose.viewModel
+import app.suhasdissa.vibeyou.presentation.layout.MainAppContent
+import app.suhasdissa.vibeyou.presentation.screens.player.model.PlayerViewModel
+import app.suhasdissa.vibeyou.presentation.screens.settings.model.SettingsModel
+import app.suhasdissa.vibeyou.ui.theme.VibeYouTheme
+import app.suhasdissa.vibeyou.utils.ThemeUtil
 
 class MainActivity : ComponentActivity() {
 
     private val playerViewModel: PlayerViewModel by viewModels { PlayerViewModel.Factory }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContent {
-            LibreMusicTheme {
-                val navHostController = rememberNavController()
+            val settingsModel: SettingsModel = viewModel(factory = SettingsModel.Factory)
+            val playerViewModel: PlayerViewModel =
+                viewModel(factory = PlayerViewModel.Factory)
+
+            val darkTheme = when (settingsModel.themeMode) {
+                SettingsModel.Theme.SYSTEM -> isSystemInDarkTheme()
+                SettingsModel.Theme.DARK, SettingsModel.Theme.AMOLED -> true
+                else -> false
+            }
+            VibeYouTheme(
+                darkTheme = darkTheme,
+                customColorScheme = ThemeUtil.getSchemeFromSeed(
+                    settingsModel.customColor,
+                    darkTheme
+                ),
+                dynamicColor = settingsModel.colorTheme == SettingsModel.ColorTheme.SYSTEM,
+                amoledDark = settingsModel.themeMode == SettingsModel.Theme.AMOLED
+            ) {
                 val primaryColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f).toArgb()
 
                 LaunchedEffect(Unit) {
                     (application as MellowMusicApplication).accentColor = primaryColor
                 }
-
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.surface
-                ) {
-                    val drawerState = rememberDrawerState(DrawerValue.Closed)
-                    val scope = rememberCoroutineScope()
-                    var currentDestination by remember {
-                        mutableStateOf<Destination>(Destination.PipedMusic)
-                    }
-                    ModalNavigationDrawer(
-                        drawerState = drawerState,
-                        gesturesEnabled = drawerState.isOpen,
-                        drawerContent = {
-                            NavDrawerContent(
-                                currentDestination = currentDestination,
-                                onDestinationSelected = {
-                                    scope.launch {
-                                        drawerState.close()
-                                    }
-                                    navHostController.navigateTo(it.route)
-                                    currentDestination = it
-                                }
-                            )
-                        }
-                    ) {
-                        AppNavHost(navHostController = navHostController)
-                    }
+                Surface {
+                    MainAppContent(
+                        playerViewModel, settingsModel
+                    )
                 }
             }
         }
@@ -85,8 +71,11 @@ class MainActivity : ComponentActivity() {
     private fun handleIntent(intent: Intent) {
         when (intent.action) {
             Intent.ACTION_VIEW -> {
-                val uri = intent.data
-                uri?.let {
+                val uri = intent.data ?: return
+                // Check if uri points to a device file
+                if (uri.scheme == "file" || uri.scheme == "content") {
+                    playerViewModel.tryToPlayUri(uri)
+                } else {
                     processLink(uri)
                 }
             }

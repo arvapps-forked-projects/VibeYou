@@ -24,6 +24,9 @@ fun Player.playPause() {
     if (isPlaying) {
         pause()
     } else {
+        if (playbackState == Player.STATE_IDLE) {
+            prepare()
+        }
         play()
     }
 }
@@ -37,10 +40,26 @@ fun Player.forcePlay(mediaItem: MediaItem) {
 fun Player.playGracefully(mediaItem: MediaItem) {
     if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
         forcePlay(mediaItem)
+    } else {
+        val newIndex = currentPeriodIndex + 1
+        addMediaItem(newIndex, mediaItem)
+        seekTo(newIndex, C.TIME_UNSET)
     }
-    val newIndex = currentPeriodIndex + 1
-    addMediaItem(newIndex, mediaItem)
-    seekTo(newIndex, C.TIME_UNSET)
+}
+
+fun Player.seekNext() {
+    if (playbackState == Player.STATE_IDLE) {
+        prepare()
+    }
+    seekToNext()
+
+}
+
+fun Player.seek(position: Long) {
+    if (playbackState == Player.STATE_IDLE) {
+        prepare()
+    }
+    seekTo(position)
 }
 
 fun Player.enqueue(mediaItem: MediaItem) {
